@@ -1,0 +1,28 @@
+{
+  "version": "0.5.2",
+  "checked": "2026-09-16",
+  "url": "https://github.com/grindinggear/poe2-skilltree-export/releases/tag/0.5.2",
+  "dataUrl": "https://github.com/grindinggear/poe2-skilltree-export/blob/0.5.2/data.json",
+  "nodes": {
+    "inc": {
+      "id": 2200,
+      "name": "Damage",
+      "stat": "10% increased Damage"
+    },
+    "speed": {
+      "id": 97,
+      "name": "Attack Speed",
+      "stat": "3% increased [Attack] Speed"
+    },
+    "critInc": {
+      "id": 4157,
+      "name": "Critical Chance",
+      "stat": "10% increased [Critical|Critical Hit Chance]"
+    },
+    "bonusInc": {
+      "id": 535,
+      "name": "Critical Damage",
+      "stat": "15% increased [CriticalDamageBonus|Critical Damage Bonus]"
+    }
+  }
+}

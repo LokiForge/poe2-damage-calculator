@@ -1,8 +1,69 @@
-export const defaults = {base:1000,added:0,inc:200,rate:1,crit:5,bonus:100,more:[{name:'独立倍率 1',value:30}]};
-export function validate(s){
- for(const k of ['base','added','inc','rate','crit','bonus']) if(typeof s[k]!=='number'||!Number.isFinite(s[k])) throw Error('请填写有效数字');
- if(s.base<0||s.added<0||s.inc< -100||s.rate<0||s.crit<0||s.crit>100||s.bonus<0) throw Error('输入超出允许范围');
- if(!Array.isArray(s.more)||s.more.length>50||s.more.some(m=>typeof m.name!=='string'||!Number.isFinite(m.value)||m.value< -100)) throw Error('More 倍率无效');
+export const groupKeys = ['added', 'inc', 'gain', 'speed', 'critInc', 'bonusInc'];
+export const passiveDefaults = { inc: 10, speed: 3, critInc: 10, bonusInc: 15 };
+const entry = (value = 0, name = '') => ({ name, value });
+export const defaults = {
+  version: 2, base: 1000, baseRate: 1, baseCrit: 5, baseBonus: 100,
+  added: [entry()], inc: [entry(200)], gain: [entry()], speed: [entry()],
+  critInc: [entry()], bonusInc: [entry()],
+  more: [{ name: 'More 1', entries: [entry(30)] }],
+  passives: { ...passiveDefaults },
+};
+export const sum = rows => rows.reduce((total, row) => total + row.value, 0);
+function finite(n) { if (typeof n !== 'number' || !Number.isFinite(n)) throw Error('请填写有效数字'); }
+function rowsValid(rows, min) {
+  if (!Array.isArray(rows) || rows.length > 50) throw Error('每个区间最多 50 条');
+  for (const row of rows) {
+    if (!row || typeof row.name !== 'string') throw Error('条目名称无效');
+    finite(row.value);
+    if (row.value < min) throw Error('条目数值超出允许范围');
+  }
 }
-export function calculate(s){validate(s);const more=s.more.reduce((a,m)=>a*(1+m.value/100),1);const hit=(s.base+s.added)*(1+s.inc/100)*more;const average=hit*(1+s.crit/100*s.bonus/100);const dps=average*s.rate;if(!Number.isFinite(dps))throw Error('数值过大，请降低输入');return {hit,average,dps,more};}
-export function marginal(s){const current=calculate(s).dps;const items=[['base','技能基础伤害','+1 点'],['added','附加基础伤害','+1 点'],['inc','Increased 增伤','+1 个百分点'],['rate','每秒命中次数','+1 次/秒'],['crit','最终暴击率','+1 个百分点'],['bonus','最终暴击伤害加成','+1 个百分点']].map(([key,name,unit])=>({name,unit,change:d=>{d[key]=key==='crit'?Math.min(100,d[key]+1):d[key]+1;}}));s.more.forEach((m,i)=>items.push({name:m.name||`独立倍率 ${i+1}`,unit:'+1 个百分点（已有 More）',change:d=>d.more[i].value++}));items.push({name:'新增独立 More',unit:'新增 ×1.01 倍率',change:null});return items.map(({name,unit,change})=>{const next=structuredClone(s);if(change)change(next);const delta=change?calculate(next).dps-current:current*0.01;return {name,unit,delta,percent:current===0?null:delta/current*100};});}
+export function validate(s) {
+  for (const k of ['base', 'baseRate', 'baseCrit', 'baseBonus']) { finite(s[k]); if (s[k] < 0) throw Error('基础数值不能为负数'); }
+  if (s.baseCrit > 100) throw Error('基础暴击率不能超过 100%');
+  for (const k of groupKeys) { rowsValid(s[k], ['added', 'gain'].includes(k) ? 0 : -100); if (sum(s[k]) < -100) throw Error('增加与降低合计不能低于 −100%'); }
+  if (!Array.isArray(s.more) || s.more.length > 30) throw Error('最多 30 个独立 More 区间');
+  for (const g of s.more) { if (typeof g.name !== 'string') throw Error('乘区名称无效'); rowsValid(g.entries, -100); if (sum(g.entries) < -100) throw Error('More 区间合计不能低于 −100%'); }
+  for (const k of Object.keys(passiveDefaults)) { finite(s.passives?.[k]); if (s.passives[k] < 0 || s.passives[k] > 1000) throw Error('小点数值须在 0–1000% 之间'); }
+}
+export function calculate(s) {
+  validate(s);
+  const totals = Object.fromEntries(groupKeys.map(k => [k, sum(s[k])]));
+  const gainedBase = (s.base + totals.added) * (1 + totals.gain / 100);
+  const more = s.more.reduce((v, g) => v * (1 + sum(g.entries) / 100), 1);
+  const rate = s.baseRate * (1 + totals.speed / 100);
+  const crit = Math.min(100, s.baseCrit * (1 + totals.critInc / 100));
+  const bonus = s.baseBonus * (1 + totals.bonusInc / 100);
+  const hit = gainedBase * (1 + totals.inc / 100) * more;
+  const average = hit * (1 + crit / 100 * bonus / 100);
+  const dps = average * rate;
+  if (![gainedBase, more, rate, crit, bonus, hit, average, dps].every(Number.isFinite)) throw Error('数值过大，请降低输入');
+  return { totals, gainedBase, more, rate, crit, bonus, hit, average, dps };
+}
+export function increase(s, key, amount, moreIndex) {
+  const next = structuredClone(s);
+  const rows = key === 'more' ? next.more[moreIndex].entries : next[key];
+  if (rows.length) rows[0].value += amount;
+  else rows.push(entry(amount));
+  return next;
+}
+export function benefit(s, key, amount = 1, moreIndex) {
+  const before = calculate(s).dps;
+  const after = calculate(increase(s, key, amount, moreIndex)).dps;
+  return { after, delta: after - before, percent: before === 0 ? null : (after - before) / before * 100 };
+}
+export function comparePassives(s) {
+  const labels = { inc: '伤害 inc', speed: '攻击速度增加', critInc: '暴击率增加', bonusInc: '暴击伤害加成增加' };
+  const rows = Object.keys(passiveDefaults).map(key => ({ key, name: labels[key], amount: s.passives[key], ...benefit(s, key, s.passives[key]) })).sort((a, b) => b.delta - a.delta);
+  const best = rows[0].delta;
+  return rows.map(r => ({ ...r, rating: best <= 0 ? 'neutral' : r.delta >= best * (1 - 1e-9) ? 'good' : r.delta < best * 0.5 ? 'poor' : 'neutral' }));
+}
+export function migrate(s) {
+  if (s?.version === 2) { validate(s); return structuredClone(s); }
+  if (!s) throw Error('配置无效');
+  for (const k of ['base', 'rate', 'crit', 'bonus', 'added', 'inc']) finite(s[k]);
+  const next = { ...structuredClone(defaults), base: s.base, baseRate: s.rate, baseCrit: s.crit,
+    baseBonus: 100, added: [entry(s.added)], inc: [entry(s.inc)], bonusInc: [entry(s.bonus - 100)],
+    more: s.more.map(m => ({ name: m.name, entries: [entry(m.value)] })) };
+  validate(next); return next;
+}
