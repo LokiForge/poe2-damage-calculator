@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=9';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=10';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -7,7 +7,7 @@ const pct = n => new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 4 }).fo
 const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
 const sections = [
   { key: 'added', title: '附加点伤', unit: '点', min: 0, hint: '多条相加。填写已折算技能伤害效用的平均附加伤害。' },
-  { key: 'gain', title: '额外伤害(gain)', unit: '%', min: 0, hint: '多条相加，再按同一份基础伤害获得额外伤害。原伤害与额外伤害使用相同增伤。' },
+  { key: 'gain', title: '额外伤害(gain)', unit: '%', min: 0, hint: '' },
   { key: 'inc', title: '伤害增加(inc)', unit: '%', min: -100, hint: '所有适用的 increased 相加；reduced 填负数。' },
   { key: 'speed', title: '攻击速度增加', unit: '%', min: -100, hint: 'increased 相加；reduced 填负数，作用于顶部原始攻速。' },
   { key: 'critInc', title: '暴击率增加', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。' },
@@ -71,7 +71,7 @@ function renderSection(config, moreIndex) {
   const add = el('button', 'add', '添加条目'); add.type = 'button'; add.disabled = rows.length >= 50; add.setAttribute('aria-label', `${config.title}添加条目`);
   add.addEventListener('click', () => { rows.push({ name: '', value: 0 }); renderGroups(); update(); });
   const help = el('details', 'inline-help'); help.append(el('summary', '', '计算说明'), el('p', 'hint', config.hint));
-  body.append(add, help); card.append(body);
+  body.append(add); if (config.hint) body.append(help); card.append(body);
   return card;
 }
 function renderGroups() {
@@ -103,7 +103,7 @@ function renderBenefits(r) {
   }
   state.more.forEach((g, i) => {
     const card = $(`#more-${i}`); card.querySelector('.subtotal').textContent = `${pct(sum(g.entries))}% · ×${pct(1 + sum(g.entries) / 100)}`;
-    unitBenefit(g.name || `More ${i + 1}`, benefit(state, 'more', 1, i), '+1 个百分点');
+    unitBenefit(`伤害总增(more) ${i + 1}`, benefit(state, 'more', 1, i), '+1 个百分点');
   });
 }
 function unitBenefit(title, b, label) {
