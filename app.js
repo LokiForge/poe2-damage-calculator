@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=14';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=15';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -88,8 +88,8 @@ function renderBenefits(r) {
   const rows = marginalRows(state), best = rows[0]?.percent ?? 0;
   $('#unit-results').replaceChildren(...rows.map(b => {
     const rating = best <= 0 || b.percent === null ? 'neutral' : b.percent >= best * (1 - 1e-9) ? 'good' : b.percent < best * .5 ? 'poor' : 'neutral';
-    const row = el('tr', rating), title = el('td', '', b.name); title.append(el('small', '', b.unit));
-    row.append(title, el('td', '', '+' + fmt(b.delta)), el('td', '', b.percent === null ? '—' : '+' + pct(b.percent) + '%'));
+    const row = el('tr', rating), title = el('td', '', b.name);
+    row.append(title, el('td', '', b.unit), el('td', '', '+' + fmt(b.delta)), el('td', '', b.percent === null ? '—' : '+' + pct(b.percent) + '%'));
     return row;
   }));
 }
