@@ -3,9 +3,9 @@ export const passiveDefaults = { inc: 10, speed: 3, critInc: 10, bonusInc: 15 };
 const entry = (value = 0, name = '') => ({ name, value });
 export const defaults = {
   version: 2, base: 1000, baseRate: 1, baseCrit: 5, baseBonus: 100,
-  added: [entry()], inc: [entry(200)], gain: [entry()], speed: [entry()],
+  added: [entry()], inc: [entry()], gain: [entry()], speed: [entry()],
   critInc: [entry()], bonusInc: [entry()],
-  more: [{ name: 'More 1', entries: [entry(30)] }],
+  more: [{ name: '', entries: [entry()] }],
   passives: { ...passiveDefaults },
 };
 export const sum = rows => rows.reduce((total, row) => total + row.value, 0);
@@ -66,4 +66,12 @@ export function migrate(s) {
     baseBonus: 100, added: [entry(s.added)], inc: [entry(s.inc)], bonusInc: [entry(s.bonus - 100)],
     more: s.more.map(m => ({ name: m.name, entries: [entry(m.value)] })) };
   validate(next); return next;
+}
+
+export function marginalRows(s) {
+  const names = { added: '附加点伤', speed: '攻击速度', critInc: '暴击率', bonusInc: '暴击伤害加成', gain: '额外伤害(gain)', inc: '伤害增加(inc)' };
+  const rows = Object.entries(names).map(([key, name]) => ({ name, unit: key === 'added' ? '+1 点' : '+1 个百分点', ...benefit(s, key) }));
+  s.more.forEach((g, i) => rows.push({ name: s.more.length === 1 ? '伤害总增(more)' : '伤害总增(more) · 第 ' + (i + 1) + ' 条', unit: '+1 个百分点', ...benefit(s, 'more', 1, i) }));
+  if (!s.more.length) { const dps = calculate(s).dps; rows.push({ name: '伤害总增(more)', unit: '新增独立 1%', delta: dps * .01, percent: dps === 0 ? null : 1 }); }
+  return rows.sort((a, b) => (b.percent ?? -Infinity) - (a.percent ?? -Infinity) || b.delta - a.delta);
 }

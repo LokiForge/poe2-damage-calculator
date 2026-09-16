@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=13';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=14';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -7,11 +7,11 @@ const pct = n => new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 4 }).fo
 const el = (tag, cls, text) => { const node = document.createElement(tag); if (cls) node.className = cls; if (text !== undefined) node.textContent = text; return node; };
 const sections = [
   { key: 'added', title: '附加点伤', unit: '点', min: 0, hint: '多条相加。填写已折算技能伤害效用的平均附加伤害。' },
+  { key: 'speed', title: '攻击速度', unit: '%', min: -100, hint: 'increased 相加；reduced 填负数，作用于顶部原始攻速。' },
+  { key: 'critInc', title: '暴击率', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。' },
+  { key: 'bonusInc', title: '暴击伤害加成', unit: '%', min: -100, hint: '基础暴击伤害加成 ×（1 + 增加合计）。基础通常为 100%，请按实际填写。', base: 'baseBonus', baseLabel: '基础暴击伤害加成' },
   { key: 'gain', title: '额外伤害(gain)', unit: '%', min: 0, hint: '' },
   { key: 'inc', title: '伤害增加(inc)', unit: '%', min: -100, hint: '所有适用的 increased 相加；reduced 填负数。' },
-  { key: 'speed', title: '攻击速度增加', unit: '%', min: -100, hint: 'increased 相加；reduced 填负数，作用于顶部原始攻速。' },
-  { key: 'critInc', title: '暴击率增加', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。' },
-  { key: 'bonusInc', title: '暴击伤害加成增加', unit: '%', min: -100, hint: '基础暴击伤害加成 ×（1 + 增加合计）。基础通常为 100%，请按实际填写。', base: 'baseBonus', baseLabel: '基础暴击伤害加成' },
 ];
 let state = structuredClone(defaults), history = [], valid = true, migrated = false, selectedId = null;
 function notice(text) { $('#notice').hidden = !text; $('#notice').textContent = text; }
@@ -51,16 +51,16 @@ function renderSection(config, moreIndex) {
   card.id = `group-${config.key}`;
   if (config.base) {
     const label = el('label', 'base-inline', config.baseLabel), wrap = el('span', 'input-wrap');
-    const input = numeric(state[config.base], config.baseLabel, 0, config.baseMax);
-    input.addEventListener('input', () => { state[config.base] = input.valueAsNumber; update(); });
+    const input = numeric(state[config.base], config.baseLabel, 0, config.baseMax); input.required = false; if (state[config.base] === 100) input.value = '';
+    input.addEventListener('input', () => { state[config.base] = input.value === '' ? 100 : input.valueAsNumber; update(); });
     wrap.append(input, el('span', '', '%')); label.append(wrap); body.append(label);
   }
   rows.forEach((row, i) => {
     const line = el('div', 'more-row'), name = el('input'), wrap = el('span', 'input-wrap');
     name.type = 'text'; name.value = row.name; name.placeholder = '备注（选填）'; name.maxLength = 80; name.setAttribute('aria-label', `${config.title} 备注 ${i + 1}`);
     name.addEventListener('input', () => { row.name = name.value; update(); });
-    const value = numeric(row.value, `${config.title} 数值 ${i + 1}`, config.min);
-    value.addEventListener('input', () => { row.value = value.valueAsNumber; update(); });
+    const value = numeric(row.value, `${config.title} 数值 ${i + 1}`, config.min); value.required = false; if (row.value === 0) value.value = '';
+    value.addEventListener('input', () => { row.value = value.value === '' ? 0 : value.valueAsNumber; update(); });
     wrap.append(value, el('span', '', config.unit));
     const remove = el('button', 'remove', '×'); remove.type = 'button'; remove.setAttribute('aria-label', `删除${config.title}条目 ${i + 1}`);
     remove.addEventListener('click', () => { (isMore ? state.more : rows).splice(i, 1); renderGroups(); update(); });
@@ -80,21 +80,18 @@ function renderGroups() {
 }
 function fill() { for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].value = state[key]; renderGroups(); state.passives = { ...passiveDefaults }; update(); }
 function renderBenefits(r) {
-  $('#unit-results').replaceChildren();
   for (const config of sections) {
-    const card = $(`#group-${config.key}`), total = r.totals[config.key];
-    card.querySelector('.subtotal').textContent = `${pct(total)}${config.unit}`;
-    unitBenefit(config.title, benefit(state, config.key), config.key === 'added' ? '+1 点' : '+1 个百分点');
+    const total = r.totals[config.key];
+    $('#group-' + config.key + ' .subtotal').textContent = total === 0 ? '' : pct(total) + config.unit;
   }
-  $('#group-more .subtotal').textContent = `${pct((r.more - 1) * 100)}%`;
-  state.more.forEach((g, i) => {
-    unitBenefit(`伤害总增(more) · 第 ${i + 1} 条`, benefit(state, 'more', 1, i), '+1 个百分点');
-  });
-}
-function unitBenefit(title, b, label) {
-  const row = el('div', 'unit-row'); row.append(el('strong', '', title));
-  const detail = el('span'); detail.textContent = `${label} → +${fmt(b.delta)} DPS${b.percent === null ? '（当前 DPS 为 0，相对收益不定义）' : `（+${pct(b.percent)}%）`}`;
-  row.append(detail); $('#unit-results').append(row);
+  $('#group-more .subtotal').textContent = r.more === 1 ? '' : pct((r.more - 1) * 100) + '%';
+  const rows = marginalRows(state), best = rows[0]?.percent ?? 0;
+  $('#unit-results').replaceChildren(...rows.map(b => {
+    const rating = best <= 0 || b.percent === null ? 'neutral' : b.percent >= best * (1 - 1e-9) ? 'good' : b.percent < best * .5 ? 'poor' : 'neutral';
+    const row = el('tr', rating), title = el('td', '', b.name); title.append(el('small', '', b.unit));
+    row.append(title, el('td', '', '+' + fmt(b.delta)), el('td', '', b.percent === null ? '—' : '+' + pct(b.percent) + '%'));
+    return row;
+  }));
 }
 function update() {
   try {

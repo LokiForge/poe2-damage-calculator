@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaults, calculate, comparePassives, benefit, migrate } from '../calculator.js';
-const fresh = patch => ({ ...structuredClone(defaults), ...patch });
+import { defaults, calculate, comparePassives, benefit, migrate, marginalRows } from '../calculator.js';
+const fresh = patch => ({ ...structuredClone(defaults), inc: [{name:'',value:200}], more: [{name:'',entries:[{name:'',value:30}]}], ...patch });
 const rows = (...values) => values.map(value => ({ name: '', value }));
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
 test('gain shares the original base without recursively gaining gained damage', () => {
@@ -50,4 +50,20 @@ test('invalid fields and reductions beyond 100 percent are rejected', () => {
 test('empty groups and full groups support marginal calculation', () => {
   near(calculate(fresh({ more: [], inc: [], baseCrit: 0 })).dps, 1000);
   assert.ok(Number.isFinite(benefit(fresh({ inc: rows(...Array(50).fill(1)) }), 'inc').delta));
+});
+
+test('default modifiers are neutral, base inputs remain', () => {
+  near(calculate(defaults).dps, 1050);
+  for (const key of ['added','inc','gain','speed','critInc','bonusInc']) assert.ok(defaults[key].every(r => r.value === 0));
+  near(calculate(defaults).more, 1);
+});
+test('marginal rows sort by percentage gain descending', () => {
+  const list = marginalRows(fresh({inc: rows(9900)}));
+  for(let i=1;i<list.length;i++) assert.ok(list[i-1].percent >= list[i].percent);
+  near(list.find(r=>r.name==='伤害增加(inc)').percent, .01);
+  near(list.find(r=>r.name==='攻击速度').percent, 1);
+  assert.ok(list.findIndex(r=>r.name==='攻击速度') < list.findIndex(r=>r.name==='伤害增加(inc)'));
+});
+test('zero DPS marginal rows remain finite in absolute terms', () => {
+  assert.ok(marginalRows(fresh({base:0})).every(r=>r.percent===null && Number.isFinite(r.delta)));
 });
