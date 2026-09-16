@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=6';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=7';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -136,7 +136,7 @@ function update() {
   $('#save').disabled = !valid; $('#show-results').disabled = !valid;
 }
 function showView(results) {
-  $('#results').hidden = !results; $('#show-results').hidden = results;
+  $('#results').hidden = !results; $('#result-placeholder').hidden = results;
   if (results) { $('#results-title').focus(); }
   else { $('#show-results').focus(); }
 }
