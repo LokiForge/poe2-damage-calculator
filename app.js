@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=3';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=4';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -38,20 +38,24 @@ function numeric(value, label, min = 0, max) {
 function renderSection(config, moreIndex) {
   const isMore = config.key === 'more', group = isMore ? state.more[moreIndex] : null;
   const rows = isMore ? group.entries : state[config.key];
-  const card = el('section', 'card multiplier'), heading = el('div', 'section-title');
+  const card = el('details', 'multiplier'), heading = el('div', 'section-title');
+  const summary = el('summary'), summaryTitle = el('span', 'summary-title', isMore ? group.name || config.title : config.title);
+  summary.append(summaryTitle, el('span', 'subtotal'));
+  card.append(summary);
+  const body = el('div', 'multiplier-body');
   card.id = isMore ? `more-${moreIndex}` : `group-${config.key}`;
   if (isMore) {
     const name = el('input', 'group-name'); name.type = 'text'; name.value = group.name; name.maxLength = 80; name.setAttribute('aria-label', `More 乘区 ${moreIndex + 1} 名称`);
-    name.addEventListener('input', () => { group.name = name.value; update(); });
+    name.addEventListener('input', () => { group.name = name.value; summaryTitle.textContent = name.value || config.title; update(); });
     const remove = el('button', 'quiet', '删除乘区'); remove.type = 'button'; remove.addEventListener('click', () => { state.more.splice(moreIndex, 1); renderGroups(); update(); });
     heading.append(name, remove);
-  } else heading.append(el('h3', '', config.title));
-  card.append(heading);
+  }
+  if (isMore) body.append(heading);
   if (config.base) {
     const label = el('label', 'base-inline', config.baseLabel), wrap = el('span', 'input-wrap');
     const input = numeric(state[config.base], config.baseLabel, 0, config.baseMax);
     input.addEventListener('input', () => { state[config.base] = input.valueAsNumber; update(); });
-    wrap.append(input, el('span', '', '%')); label.append(wrap); card.append(label);
+    wrap.append(input, el('span', '', '%')); label.append(wrap); body.append(label);
   }
   rows.forEach((row, i) => {
     const line = el('div', 'more-row'), name = el('input'), wrap = el('span', 'input-wrap');
@@ -62,16 +66,19 @@ function renderSection(config, moreIndex) {
     wrap.append(value, el('span', '', config.unit));
     const remove = el('button', 'remove', '×'); remove.type = 'button'; remove.setAttribute('aria-label', `删除${config.title}条目 ${i + 1}`);
     remove.addEventListener('click', () => { rows.splice(i, 1); renderGroups(); update(); });
-    line.append(name, wrap, remove); card.append(line);
+    line.append(name, wrap, remove); body.append(line);
   });
   const add = el('button', 'add', '添加条目'); add.type = 'button'; add.disabled = rows.length >= 50; add.setAttribute('aria-label', `${config.title}添加条目`);
   add.addEventListener('click', () => { rows.push({ name: '', value: 0 }); renderGroups(); update(); });
-  card.append(add, el('p', 'hint', config.hint), el('p', 'subtotal'), el('p', 'unit-benefit'));
+  const help = el('details', 'inline-help'); help.append(el('summary', '', '计算说明'), el('p', 'hint', config.hint));
+  body.append(add, help); card.append(body);
   return card;
 }
 function renderGroups() {
+  const openIds = new Set([...document.querySelectorAll('.multiplier[open]')].map(n => n.id));
   $('#groups').replaceChildren(...sections.map(c => renderSection(c)));
   $('#more-groups').replaceChildren(...state.more.map((g, i) => renderSection({ key: 'more', title: `More ${i + 1}`, min: -100, unit: '%', hint: '此框条目相加；与其他 More 框相乘。负数表示 less。' }, i)));
+  for (const id of openIds) { const node = document.getElementById(id); if (node) node.open = true; }
   $('#add-more').disabled = state.more.length >= 30;
 }
 function renderPassiveInputs() {
@@ -84,22 +91,25 @@ function renderPassiveInputs() {
 }
 function fill() { for (const key of ['base', 'baseRate']) $('#form').elements[key].value = state[key]; renderGroups(); renderPassiveInputs(); update(); }
 function renderBenefits(r) {
+  $('#unit-results').replaceChildren();
   for (const config of sections) {
     const card = $(`#group-${config.key}`), total = r.totals[config.key];
-    let text = `合计 ${pct(total)}${config.unit}`;
-    if (config.key === 'critInc') text += ` · 最终暴击率 ${pct(r.crit)}%`;
-    else if (config.key === 'bonusInc') text += ` · 最终加成 ${pct(r.bonus)}%`;
+    let text = `${pct(total)}${config.unit}`;
+    if (config.key === 'critInc') text += ` · 暴击率 ${pct(r.crit)}%`;
+    else if (config.key === 'bonusInc') text += ` · 加成 ${pct(r.bonus)}%`;
     else if (config.key !== 'added') text += ` · ×${pct(1 + total / 100)}`;
     card.querySelector('.subtotal').textContent = text;
-    unitBenefit(card, benefit(state, config.key), config.key === 'added' ? '+1 点' : '+1 个百分点');
+    unitBenefit(config.title, benefit(state, config.key), config.key === 'added' ? '+1 点' : '+1 个百分点');
   }
   state.more.forEach((g, i) => {
-    const card = $(`#more-${i}`); card.querySelector('.subtotal').textContent = `合计 ${pct(sum(g.entries))}% · ×${pct(1 + sum(g.entries) / 100)}`;
-    unitBenefit(card, benefit(state, 'more', 1, i), '+1 个百分点');
+    const card = $(`#more-${i}`); card.querySelector('.subtotal').textContent = `${pct(sum(g.entries))}% · ×${pct(1 + sum(g.entries) / 100)}`;
+    unitBenefit(g.name || `More ${i + 1}`, benefit(state, 'more', 1, i), '+1 个百分点');
   });
 }
-function unitBenefit(card, b, label) {
-  card.querySelector('.unit-benefit').textContent = `${label} → +${fmt(b.delta)} DPS${b.percent === null ? '（当前 DPS 为 0，相对收益不定义）' : `（+${pct(b.percent)}%）`}`;
+function unitBenefit(title, b, label) {
+  const row = el('div', 'unit-row'); row.append(el('strong', '', title));
+  const detail = el('span'); detail.textContent = `${label} → +${fmt(b.delta)} DPS${b.percent === null ? '（当前 DPS 为 0，相对收益不定义）' : `（+${pct(b.percent)}%）`}`;
+  row.append(detail); $('#unit-results').append(row);
 }
 function update() {
   try {
@@ -121,22 +131,29 @@ function update() {
     valid = false; $('#error').textContent = e.message; $('#save-status').textContent = '当前输入尚未保存';
     for (const key of ['dps', 'hit', 'average', 'rate', 'crit']) $('#' + key).textContent = '—';
     $('#comparison').replaceChildren(); $('#recommendation').textContent = '输入有效参数后显示建议'; $('#bonus-result').textContent = ''; $('#formula').textContent = '';
-    document.querySelectorAll('.subtotal,.unit-benefit').forEach(n => n.textContent = '—');
+    document.querySelectorAll('.subtotal').forEach(n => n.textContent = '输入有误'); $('#unit-results').replaceChildren();
   }
-  $('#save').disabled = !valid;
+  $('#save').disabled = !valid; $('#show-results').disabled = !valid;
 }
+function showView(results) {
+  $('#base-editor').hidden = results; $('#editor').hidden = results; $('#results').hidden = !results;
+  if (results) { $('#results-title').focus(); }
+  else { $('#form').elements.base.focus(); }
+}
+$('#show-results').addEventListener('click', () => { update(); if (valid) { showView(true); $('#results').scrollIntoView({ block: 'start' }); } });
+$('#back-edit').addEventListener('click', () => { showView(false); $('#form').scrollIntoView({ block: 'start' }); });
 $('#form').addEventListener('submit', e => e.preventDefault());
 for (const key of ['base', 'baseRate']) $('#form').elements[key].addEventListener('input', e => { state[key] = e.target.valueAsNumber; update(); });
-$('#add-more').addEventListener('click', () => { state.more.push({ name: `More ${state.more.length + 1}`, entries: [{ name: '', value: 0 }] }); renderGroups(); update(); });
-$('#reset').addEventListener('click', () => { state = structuredClone(defaults); notice(''); fill(); });
+$('#add-more').addEventListener('click', () => { state.more.push({ name: `More ${state.more.length + 1}`, entries: [{ name: '', value: 0 }] }); renderGroups(); const last = $('#more-groups').lastElementChild; if (last) last.open = true; update(); });
+$('#reset').addEventListener('click', () => { state = structuredClone(defaults); notice(''); fill(); document.querySelectorAll('.multiplier').forEach(n => n.open = false); });
 $('#save').addEventListener('click', () => { if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); persist(); renderHistory(); });
 function renderHistory() {
-  const list = $('#history-list'); list.replaceChildren();
+  const list = $('#history-list'); list.replaceChildren(); $('#history-count').textContent = `（${history.length}）`;
   if (!history.length) { list.append(el('div', 'empty', '暂无历史记录。点击“保存结果”添加。')); return; }
   history.forEach(h => {
     const row = el('div', 'history-entry'), record = el('div', 'record'), load = el('button', '', '载入配置'), remove = el('button', 'quiet', '删除');
     record.append(el('strong', '', `${fmt(calculate(h.state).dps)} DPS`), el('small', '', `${new Date(h.date).toLocaleString('zh-CN')} · 基础 ${fmt(h.state.base)} · 原始攻速 ${pct(h.state.baseRate)} · gain ${pct(sum(h.state.gain))}%${h.migrated ? ' · 旧版迁移' : ''}`));
-    load.addEventListener('click', () => { state = structuredClone(h.state); notice(h.migrated ? '旧版配置：最终攻速与最终暴击率暂作原始值，请核对后再填写对应 increased。' : ''); fill(); $('#form').scrollIntoView({ block: 'start' }); });
+    load.addEventListener('click', () => { state = structuredClone(h.state); notice(h.migrated ? '旧版配置：最终攻速与最终暴击率暂作原始值，请核对后再填写对应 increased。' : ''); fill(); showView(false); $('.history').open = false; $('#form').scrollIntoView({ block: 'start' }); });
     remove.addEventListener('click', () => { history = history.filter(item => item.id !== h.id); persist(); renderHistory(); });
     row.append(record, load, remove); list.append(row);
   });
