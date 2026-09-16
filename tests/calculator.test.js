@@ -5,3 +5,4 @@ test('inc marginal versus existing and new more',()=>{const rows=marginal(defaul
 test('critical chance clamps at 100 percent',()=>{near(marginal({...defaults,crit:100})[4].delta,0);near(marginal({...defaults,crit:99.5})[4].delta,19.5);});
 test('zero damage and zero multipliers have defined absolute gains',()=>{const rows=marginal({...defaults,base:0});assert.equal(rows[0].percent,null);assert.ok(rows[0].delta>0);const zero={...defaults,more:[{name:'less',value:-100}]};near(calculate(zero).dps,0);assert.ok(marginal(zero).at(-2).delta>0);});
 test('invalid inputs are rejected',()=>{for(const patch of [{base:-1},{inc:-101},{crit:101},{rate:NaN},{more:[{name:'x',value:-101}]}])assert.throws(()=>calculate({...defaults,...patch}));});
+test('maximum 50 more entries still allows independent marginal comparison',()=>{const s={...defaults,more:Array.from({length:50},()=>({name:'x',value:0}))};near(marginal(s).at(-1).percent,1);});
