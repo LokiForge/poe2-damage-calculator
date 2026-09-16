@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=10';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=11';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -81,15 +81,7 @@ function renderGroups() {
   for (const id of openIds) { const node = document.getElementById(id); if (node) node.open = true; }
   $('#add-more').disabled = state.more.length >= 30;
 }
-function renderPassiveInputs() {
-  const names = { inc: '伤害 inc 小点', speed: '攻速小点', critInc: '暴击率小点', bonusInc: '暴击伤害小点' };
-  $('#passive-inputs').replaceChildren(...Object.keys(passiveDefaults).map(key => {
-    const label = el('label', '', names[key]), wrap = el('span', 'input-wrap'), input = numeric(state.passives[key], names[key], 0, 1000);
-    input.addEventListener('input', () => { state.passives[key] = input.valueAsNumber; update(); });
-    wrap.append(input, el('span', '', '% inc')); label.append(wrap); return label;
-  }));
-}
-function fill() { for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].value = state[key]; renderGroups(); renderPassiveInputs(); update(); }
+function fill() { for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].value = state[key]; renderGroups(); state.passives = { ...passiveDefaults }; update(); }
 function renderBenefits(r) {
   $('#unit-results').replaceChildren();
   for (const config of sections) {
