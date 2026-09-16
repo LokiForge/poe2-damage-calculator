@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=8';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=9';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -13,7 +13,7 @@ const sections = [
   { key: 'critInc', title: '暴击率增加', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。' },
   { key: 'bonusInc', title: '暴击伤害加成增加', unit: '%', min: -100, hint: '基础暴击伤害加成 ×（1 + 增加合计）。基础通常为 100%，请按实际填写。', base: 'baseBonus', baseLabel: '基础暴击伤害加成' },
 ];
-let state = structuredClone(defaults), history = [], valid = true, migrated = false;
+let state = structuredClone(defaults), history = [], valid = true, migrated = false, selectedId = null;
 function notice(text) { $('#notice').hidden = !text; $('#notice').textContent = text; }
 try {
   const current = localStorage.getItem(KEY), old = current ? null : localStorage.getItem(LEGACY_KEY);
@@ -146,26 +146,30 @@ $('#form').addEventListener('submit', e => e.preventDefault());
 for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].addEventListener('input', e => { state[key] = e.target.valueAsNumber; update(); });
 $('#add-more').addEventListener('click', () => { state.more.push({ name: `More ${state.more.length + 1}`, entries: [{ name: '', value: 0 }] }); renderGroups(); const last = $('#more-groups').lastElementChild; if (last) last.open = true; update(); });
 $('#reset').addEventListener('click', () => { state = structuredClone(defaults); notice(''); fill(); document.querySelectorAll('.multiplier').forEach(n => n.open = false); });
-$('#save').addEventListener('click', () => { update(); if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); persist(); renderHistory(); showScreen('history'); });
+$('#save').addEventListener('click', () => { update(); if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); selectedId = history[0].id; persist(); renderHistory(); });
 function renderHistory() {
-  const list = $('#history-list'); list.replaceChildren(); $('#history-count').textContent = `（${history.length}）`;
-  if (!history.length) { list.append(el('div', 'empty', '暂无历史记录。点击“保存结果”添加。')); return; }
+  const list = $('#history-list'); list.replaceChildren(); $('#history-count').textContent = String(history.length);
+  if (!history.length) { list.append(el('p', 'history-empty', '暂无保存记录')); return; }
   history.forEach(h => {
-    const row = el('div', 'history-entry'), record = el('div', 'record'), load = el('button', '', '载入配置'), remove = el('button', 'quiet', '删除');
-    record.append(el('strong', '', `${fmt(calculate(h.state).dps)} DPS`), el('small', '', `${new Date(h.date).toLocaleString('zh-CN')} · 基础 ${fmt(h.state.base)} · 原始攻速 ${pct(h.state.baseRate)} · gain ${pct(sum(h.state.gain))}%${h.migrated ? ' · 旧版迁移' : ''}`));
-    load.addEventListener('click', () => { state = structuredClone(h.state); notice(h.migrated ? '旧版配置：最终攻速与最终暴击率暂作原始值，请核对后再填写对应 increased。' : ''); fill(); showScreen('calculator'); showView(false); $('#form').scrollIntoView({ block: 'start' }); });
-    remove.addEventListener('click', () => { history = history.filter(item => item.id !== h.id); persist(); renderHistory(); });
-    row.append(record, load, remove); list.append(row);
+    const row = el('div', 'history-menu-row'), load = el('button', 'history-select'), remove = el('button', 'history-remove', '×');
+    load.type = remove.type = 'button';
+    const damage = fmt(calculate(h.state).dps);
+    const date = new Date(h.date).toLocaleString('zh-CN');
+    load.append(el('strong', '', damage + ' DPS'), el('small', '', date));
+    load.title = date + ' · 基础 ' + fmt(h.state.base) + ' · 原始攻速 ' + pct(h.state.baseRate);
+    if (selectedId === h.id) load.setAttribute('aria-current', 'true');
+    load.addEventListener('click', () => {
+      state = structuredClone(h.state); selectedId = h.id;
+      notice(h.migrated ? '旧版配置：最终攻速与最终暴击率暂作原始值，请核对后再填写对应 increased。' : '');
+      fill(); showView(true); renderHistory();
+    });
+    remove.setAttribute('aria-label', '删除 ' + damage + ' DPS · ' + date);
+    remove.addEventListener('click', () => { history = history.filter(item => item.id !== h.id); if (selectedId === h.id) selectedId = null; persist(); renderHistory(); });
+    row.append(load, remove); list.append(row);
   });
 }
-function showScreen(screen) {
-  const historyOpen = screen === 'history';
-  $('#form').hidden = historyOpen; $('#history-view').hidden = !historyOpen;
-  for (const key of ['calculator', 'history']) { const button = $('#nav-' + key); if (key === screen) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); }
-  if (historyOpen) $('#history-title').focus();
-}
-$('#nav-calculator').addEventListener('click', () => showScreen('calculator'));
-$('#nav-history').addEventListener('click', () => showScreen('history'));
+$('#form').addEventListener('input', () => { if (selectedId !== null) { selectedId = null; renderHistory(); } }, true);
+$('#reset').addEventListener('click', () => { selectedId = null; renderHistory(); });
 const sizeObserver = new ResizeObserver(entries => {
   const height = entries[0].target.getBoundingClientRect().height;
   if (height > 0) document.documentElement.style.setProperty('--overview-height', `${height}px`);
