@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=15';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=16';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -89,7 +89,7 @@ function renderBenefits(r) {
   $('#unit-results').replaceChildren(...rows.map(b => {
     const rating = best <= 0 || b.percent === null ? 'neutral' : b.percent >= best * (1 - 1e-9) ? 'good' : b.percent < best * .5 ? 'poor' : 'neutral';
     const row = el('tr', rating), title = el('td', '', b.name);
-    row.append(title, el('td', '', b.unit), el('td', '', '+' + fmt(b.delta)), el('td', '', b.percent === null ? '—' : '+' + pct(b.percent) + '%'));
+    row.append(title, el('td', '', b.unit === '+1 点' ? '+1 点' : '+1%'), el('td', '', '+' + fmt(b.delta)), el('td', '', b.percent === null ? '—' : '+' + pct(b.percent) + '%'));
     return row;
   }));
 }
