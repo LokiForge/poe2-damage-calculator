@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=7';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=8';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -146,16 +146,29 @@ $('#form').addEventListener('submit', e => e.preventDefault());
 for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].addEventListener('input', e => { state[key] = e.target.valueAsNumber; update(); });
 $('#add-more').addEventListener('click', () => { state.more.push({ name: `More ${state.more.length + 1}`, entries: [{ name: '', value: 0 }] }); renderGroups(); const last = $('#more-groups').lastElementChild; if (last) last.open = true; update(); });
 $('#reset').addEventListener('click', () => { state = structuredClone(defaults); notice(''); fill(); document.querySelectorAll('.multiplier').forEach(n => n.open = false); });
-$('#save').addEventListener('click', () => { if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); persist(); renderHistory(); });
+$('#save').addEventListener('click', () => { update(); if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); persist(); renderHistory(); showScreen('history'); });
 function renderHistory() {
   const list = $('#history-list'); list.replaceChildren(); $('#history-count').textContent = `（${history.length}）`;
   if (!history.length) { list.append(el('div', 'empty', '暂无历史记录。点击“保存结果”添加。')); return; }
   history.forEach(h => {
     const row = el('div', 'history-entry'), record = el('div', 'record'), load = el('button', '', '载入配置'), remove = el('button', 'quiet', '删除');
     record.append(el('strong', '', `${fmt(calculate(h.state).dps)} DPS`), el('small', '', `${new Date(h.date).toLocaleString('zh-CN')} · 基础 ${fmt(h.state.base)} · 原始攻速 ${pct(h.state.baseRate)} · gain ${pct(sum(h.state.gain))}%${h.migrated ? ' · 旧版迁移' : ''}`));
-    load.addEventListener('click', () => { state = structuredClone(h.state); notice(h.migrated ? '旧版配置：最终攻速与最终暴击率暂作原始值，请核对后再填写对应 increased。' : ''); fill(); showView(false); $('.history').open = false; $('#form').scrollIntoView({ block: 'start' }); });
+    load.addEventListener('click', () => { state = structuredClone(h.state); notice(h.migrated ? '旧版配置：最终攻速与最终暴击率暂作原始值，请核对后再填写对应 increased。' : ''); fill(); showScreen('calculator'); showView(false); $('#form').scrollIntoView({ block: 'start' }); });
     remove.addEventListener('click', () => { history = history.filter(item => item.id !== h.id); persist(); renderHistory(); });
     row.append(record, load, remove); list.append(row);
   });
 }
+function showScreen(screen) {
+  const historyOpen = screen === 'history';
+  $('#form').hidden = historyOpen; $('#history-view').hidden = !historyOpen;
+  for (const key of ['calculator', 'history']) { const button = $('#nav-' + key); if (key === screen) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); }
+  if (historyOpen) $('#history-title').focus();
+}
+$('#nav-calculator').addEventListener('click', () => showScreen('calculator'));
+$('#nav-history').addEventListener('click', () => showScreen('history'));
+const sizeObserver = new ResizeObserver(entries => {
+  const height = entries[0].target.getBoundingClientRect().height;
+  if (height > 0) document.documentElement.style.setProperty('--overview-height', `${height}px`);
+});
+sizeObserver.observe($('#base-editor'));
 fill(); renderHistory();
