@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=4';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=5';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -10,7 +10,7 @@ const sections = [
   { key: 'gain', title: 'Gain 额外伤害', unit: '%', min: 0, hint: '多条相加，再按同一份基础伤害获得额外伤害。原伤害与额外伤害使用相同增伤。' },
   { key: 'inc', title: '伤害增加（inc）', unit: '%', min: -100, hint: '所有适用的 increased 相加；reduced 填负数。' },
   { key: 'speed', title: '攻击速度增加', unit: '%', min: -100, hint: 'increased 相加；reduced 填负数，作用于顶部原始攻速。' },
-  { key: 'critInc', title: '暴击率增加', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。', base: 'baseCrit', baseLabel: '基础暴击率', baseMax: 100 },
+  { key: 'critInc', title: '暴击率增加', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。' },
   { key: 'bonusInc', title: '暴击伤害加成增加', unit: '%', min: -100, hint: '基础暴击伤害加成 ×（1 + 增加合计）。基础通常为 100%，请按实际填写。', base: 'baseBonus', baseLabel: '基础暴击伤害加成' },
 ];
 let state = structuredClone(defaults), history = [], valid = true, migrated = false;
@@ -89,7 +89,7 @@ function renderPassiveInputs() {
     wrap.append(input, el('span', '', '% inc')); label.append(wrap); return label;
   }));
 }
-function fill() { for (const key of ['base', 'baseRate']) $('#form').elements[key].value = state[key]; renderGroups(); renderPassiveInputs(); update(); }
+function fill() { for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].value = state[key]; renderGroups(); renderPassiveInputs(); update(); }
 function renderBenefits(r) {
   $('#unit-results').replaceChildren();
   for (const config of sections) {
@@ -143,7 +143,7 @@ function showView(results) {
 $('#show-results').addEventListener('click', () => { update(); if (valid) { showView(true); $('#results').scrollIntoView({ block: 'start' }); } });
 $('#back-edit').addEventListener('click', () => { showView(false); $('#form').scrollIntoView({ block: 'start' }); });
 $('#form').addEventListener('submit', e => e.preventDefault());
-for (const key of ['base', 'baseRate']) $('#form').elements[key].addEventListener('input', e => { state[key] = e.target.valueAsNumber; update(); });
+for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].addEventListener('input', e => { state[key] = e.target.valueAsNumber; update(); });
 $('#add-more').addEventListener('click', () => { state.more.push({ name: `More ${state.more.length + 1}`, entries: [{ name: '', value: 0 }] }); renderGroups(); const last = $('#more-groups').lastElementChild; if (last) last.open = true; update(); });
 $('#reset').addEventListener('click', () => { state = structuredClone(defaults); notice(''); fill(); document.querySelectorAll('.multiplier').forEach(n => n.open = false); });
 $('#save').addEventListener('click', () => { if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); persist(); renderHistory(); });
