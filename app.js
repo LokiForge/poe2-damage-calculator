@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=11';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=12';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -36,21 +36,19 @@ function numeric(value, label, min = 0, max) {
   const input = el('input'); input.type = 'number'; input.step = 'any'; input.required = true; input.min = min; if (max !== undefined) input.max = max; input.value = value; input.setAttribute('aria-label', label); return input;
 }
 function renderSection(config, moreIndex) {
-  const isMore = config.key === 'more', group = isMore ? state.more[moreIndex] : null;
-  const rows = isMore ? group.entries : state[config.key];
-  const card = el('details', 'multiplier'), heading = el('div', 'section-title');
+  const isMore = config.key === 'more';
+  const rows = isMore ? state.more.map(group => ({
+    get name() { return group.name; },
+    set name(value) { group.name = value; },
+    get value() { return sum(group.entries); },
+    set value(value) { group.entries = [{ name: '', value }]; }
+  })) : state[config.key];
+  const card = el('details', 'multiplier');
   const summary = el('summary'), summaryTitle = el('span', 'summary-title', config.title);
   summary.append(summaryTitle, el('span', 'subtotal'));
   card.append(summary);
   const body = el('div', 'multiplier-body');
-  card.id = isMore ? `more-${moreIndex}` : `group-${config.key}`;
-  if (isMore) {
-    const name = el('input', 'group-name'); name.type = 'text'; name.value = group.name; name.maxLength = 80; name.setAttribute('aria-label', `More 乘区 ${moreIndex + 1} 名称`);
-    name.addEventListener('input', () => { group.name = name.value; update(); });
-    const remove = el('button', 'quiet', '删除乘区'); remove.type = 'button'; remove.addEventListener('click', () => { state.more.splice(moreIndex, 1); renderGroups(); update(); });
-    heading.append(name, remove);
-  }
-  if (isMore) body.append(heading);
+  card.id = `group-${config.key}`;
   if (config.base) {
     const label = el('label', 'base-inline', config.baseLabel), wrap = el('span', 'input-wrap');
     const input = numeric(state[config.base], config.baseLabel, 0, config.baseMax);
@@ -65,11 +63,11 @@ function renderSection(config, moreIndex) {
     value.addEventListener('input', () => { row.value = value.valueAsNumber; update(); });
     wrap.append(value, el('span', '', config.unit));
     const remove = el('button', 'remove', '×'); remove.type = 'button'; remove.setAttribute('aria-label', `删除${config.title}条目 ${i + 1}`);
-    remove.addEventListener('click', () => { rows.splice(i, 1); renderGroups(); update(); });
+    remove.addEventListener('click', () => { (isMore ? state.more : rows).splice(i, 1); renderGroups(); update(); });
     line.append(wrap, name, remove); body.append(line);
   });
-  const add = el('button', 'add', '添加条目'); add.type = 'button'; add.disabled = rows.length >= 50; add.setAttribute('aria-label', `${config.title}添加条目`);
-  add.addEventListener('click', () => { rows.push({ name: '', value: 0 }); renderGroups(); update(); });
+  const add = el('button', 'add', '添加条目'); add.type = 'button'; add.disabled = rows.length >= (isMore ? 30 : 50); add.setAttribute('aria-label', `${config.title}添加条目`);
+  add.addEventListener('click', () => { if (isMore) state.more.push({ name: '', entries: [{ name: '', value: 0 }] }); else rows.push({ name: '', value: 0 }); renderGroups(); update(); });
   const help = el('details', 'inline-help'); help.append(el('summary', '', '计算说明'), el('p', 'hint', config.hint));
   body.append(add); if (config.hint) body.append(help); card.append(body);
   return card;
@@ -77,9 +75,8 @@ function renderSection(config, moreIndex) {
 function renderGroups() {
   const openIds = new Set([...document.querySelectorAll('.multiplier[open]')].map(n => n.id));
   $('#groups').replaceChildren(...sections.map(c => renderSection(c)));
-  $('#more-groups').replaceChildren(...state.more.map((g, i) => renderSection({ key: 'more', title: `伤害总增(more) ${i + 1}`, min: -100, unit: '%', hint: '此框条目相加；与其他 More 框相乘。负数表示 less。' }, i)));
+  $('#more-groups').replaceChildren(renderSection({ key: 'more', title: '伤害总增(more)', min: -100, unit: '%', hint: '每条为独立倍率，条目之间相乘；负数表示 less。' }));
   for (const id of openIds) { const node = document.getElementById(id); if (node) node.open = true; }
-  $('#add-more').disabled = state.more.length >= 30;
 }
 function fill() { for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].value = state[key]; renderGroups(); state.passives = { ...passiveDefaults }; update(); }
 function renderBenefits(r) {
@@ -93,9 +90,9 @@ function renderBenefits(r) {
     card.querySelector('.subtotal').textContent = text;
     unitBenefit(config.title, benefit(state, config.key), config.key === 'added' ? '+1 点' : '+1 个百分点');
   }
+  $('#group-more .subtotal').textContent = `×${pct(r.more)}`;
   state.more.forEach((g, i) => {
-    const card = $(`#more-${i}`); card.querySelector('.subtotal').textContent = `${pct(sum(g.entries))}% · ×${pct(1 + sum(g.entries) / 100)}`;
-    unitBenefit(`伤害总增(more) ${i + 1}`, benefit(state, 'more', 1, i), '+1 个百分点');
+    unitBenefit(`伤害总增(more) · 第 ${i + 1} 条`, benefit(state, 'more', 1, i), '+1 个百分点');
   });
 }
 function unitBenefit(title, b, label) {
@@ -136,7 +133,6 @@ $('#show-results').addEventListener('click', () => { update(); if (valid) { show
 $('#back-edit').addEventListener('click', () => { showView(false); });
 $('#form').addEventListener('submit', e => e.preventDefault());
 for (const key of ['base', 'baseRate', 'baseCrit']) $('#form').elements[key].addEventListener('input', e => { state[key] = e.target.valueAsNumber; update(); });
-$('#add-more').addEventListener('click', () => { state.more.push({ name: `More ${state.more.length + 1}`, entries: [{ name: '', value: 0 }] }); renderGroups(); const last = $('#more-groups').lastElementChild; if (last) last.open = true; update(); });
 $('#reset').addEventListener('click', () => { state = structuredClone(defaults); notice(''); fill(); document.querySelectorAll('.multiplier').forEach(n => n.open = false); });
 $('#save').addEventListener('click', () => { update(); if (!valid) return; history.unshift({ id: crypto.randomUUID(), date: new Date().toISOString(), state: structuredClone(state) }); history = history.slice(0, 50); selectedId = history[0].id; persist(); renderHistory(); });
 function renderHistory() {
