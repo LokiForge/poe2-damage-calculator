@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=12';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, migrate, sum } from './calculator.js?v=13';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -83,14 +83,10 @@ function renderBenefits(r) {
   $('#unit-results').replaceChildren();
   for (const config of sections) {
     const card = $(`#group-${config.key}`), total = r.totals[config.key];
-    let text = `${pct(total)}${config.unit}`;
-    if (config.key === 'critInc') text += ` · 暴击率 ${pct(r.crit)}%`;
-    else if (config.key === 'bonusInc') text += ` · 加成 ${pct(r.bonus)}%`;
-    else if (config.key !== 'added') text += ` · ×${pct(1 + total / 100)}`;
-    card.querySelector('.subtotal').textContent = text;
+    card.querySelector('.subtotal').textContent = `${pct(total)}${config.unit}`;
     unitBenefit(config.title, benefit(state, config.key), config.key === 'added' ? '+1 点' : '+1 个百分点');
   }
-  $('#group-more .subtotal').textContent = `×${pct(r.more)}`;
+  $('#group-more .subtotal').textContent = `${pct((r.more - 1) * 100)}%`;
   state.more.forEach((g, i) => {
     unitBenefit(`伤害总增(more) · 第 ${i + 1} 条`, benefit(state, 'more', 1, i), '+1 个百分点');
   });
