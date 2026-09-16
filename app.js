@@ -1,4 +1,4 @@
-import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=17';
+import { defaults, passiveDefaults, calculate, comparePassives, benefit, marginalRows, migrate, sum } from './calculator.js?v=19';
 const KEY = 'poe2-damage-calculator-v2';
 const LEGACY_KEY = 'poe2-damage-calculator-v1';
 const $ = s => document.querySelector(s);
@@ -9,7 +9,7 @@ const sections = [
   { key: 'added', title: '附加点伤', unit: '点', min: 0, hint: '多条相加。填写已折算技能伤害效用的平均附加伤害。' },
   { key: 'speed', title: '攻击速度', unit: '%', min: -100, hint: 'increased 相加；reduced 填负数，作用于顶部原始攻速。' },
   { key: 'critInc', title: '暴击率', unit: '%', min: -100, hint: '基础暴击率 ×（1 + 增加合计）。不是直接给最终暴击率加百分点。' },
-  { key: 'bonusInc', title: '暴击伤害加成', unit: '%', min: -100, hint: '基础暴击伤害加成 ×（1 + 增加合计）。基础通常为 100%，请按实际填写。', base: 'baseBonus', baseLabel: '基础暴击伤害加成' },
+  { key: 'bonusInc', title: '暴击伤害加成', unit: '%', min: -100, hint: '填写增加的暴击伤害加成，多条相加。' },
   { key: 'gain', title: '额外伤害(gain)', unit: '%', min: 0, hint: '' },
   { key: 'inc', title: '伤害增加(inc)', unit: '%', min: -100, hint: '所有适用的 increased 相加；reduced 填负数。' },
 ];
@@ -49,12 +49,6 @@ function renderSection(config, moreIndex) {
   card.append(summary);
   const body = el('div', 'multiplier-body');
   card.id = `group-${config.key}`;
-  if (config.base) {
-    const label = el('label', 'base-inline', config.baseLabel), wrap = el('span', 'input-wrap');
-    const input = numeric(state[config.base], config.baseLabel, 0, config.baseMax); input.required = false; if (state[config.base] === 100) input.value = '';
-    input.addEventListener('input', () => { state[config.base] = input.value === '' ? 100 : input.valueAsNumber; update(); });
-    wrap.append(input, el('span', '', '%')); label.append(wrap); body.append(label);
-  }
   rows.forEach((row, i) => {
     const line = el('div', 'more-row'), name = el('input'), wrap = el('span', 'input-wrap');
     name.type = 'text'; name.value = row.name; name.placeholder = '备注（选填）'; name.maxLength = 80; name.setAttribute('aria-label', `${config.title} 备注 ${i + 1}`);

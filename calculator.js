@@ -1,8 +1,9 @@
+export const BASE_CRITICAL_DAMAGE_BONUS = 100;
 export const groupKeys = ['added', 'inc', 'gain', 'speed', 'critInc', 'bonusInc'];
 export const passiveDefaults = { inc: 10, speed: 3, critInc: 10, bonusInc: 15 };
 const entry = (value = 0, name = '') => ({ name, value });
 export const defaults = {
-  version: 2, base: 1000, baseRate: 1, baseCrit: 5, baseBonus: 100,
+  version: 2, base: 1000, baseRate: 1, baseCrit: 5, baseBonus: BASE_CRITICAL_DAMAGE_BONUS,
   added: [entry()], inc: [entry()], gain: [entry()], speed: [entry()],
   critInc: [entry()], bonusInc: [entry()],
   more: [{ name: '', entries: [entry()] }],
@@ -33,7 +34,7 @@ export function calculate(s) {
   const more = s.more.reduce((v, g) => v * (1 + sum(g.entries) / 100), 1);
   const rate = s.baseRate * (1 + totals.speed / 100);
   const crit = Math.min(100, s.baseCrit * (1 + totals.critInc / 100));
-  const bonus = s.baseBonus * (1 + totals.bonusInc / 100);
+  const bonus = BASE_CRITICAL_DAMAGE_BONUS * (1 + totals.bonusInc / 100);
   const hit = gainedBase * (1 + totals.inc / 100) * more;
   const average = hit * (1 + crit / 100 * bonus / 100);
   const dps = average * rate;
@@ -59,7 +60,16 @@ export function comparePassives(s) {
   return rows.map(r => ({ ...r, rating: best <= 0 ? 'neutral' : r.delta >= best * (1 - 1e-9) ? 'good' : r.delta < best * 0.5 ? 'poor' : 'neutral' }));
 }
 export function migrate(s) {
-  if (s?.version === 2) { validate(s); return structuredClone(s); }
+  if (s?.version === 2) {
+    validate(s); const next = structuredClone(s);
+    if (next.baseBonus !== BASE_CRITICAL_DAMAGE_BONUS) {
+      const oldTotal = sum(next.bonusInc);
+      const correction = next.baseBonus / BASE_CRITICAL_DAMAGE_BONUS * (100 + oldTotal) - 100 - oldTotal;
+      next.bonusInc = [entry(oldTotal + correction, '旧基础暴击加成折算')];
+      next.baseBonus = BASE_CRITICAL_DAMAGE_BONUS;
+    }
+    validate(next); return next;
+  }
   if (!s) throw Error('配置无效');
   for (const k of ['base', 'rate', 'crit', 'bonus', 'added', 'inc']) finite(s[k]);
   const next = { ...structuredClone(defaults), base: s.base, baseRate: s.rate, baseCrit: s.crit,

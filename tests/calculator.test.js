@@ -17,7 +17,7 @@ test('attack speed increases apply to original attacks per second', () => {
 });
 test('critical increases scale base chance; bonus increases scale base bonus', () => {
   const r = calculate(fresh({ baseCrit: 7, critInc: rows(50, 50), baseBonus: 150, bonusInc: rows(20, 30) }));
-  near(r.crit, 14); near(r.bonus, 225); near(r.average, r.hit * 1.315);
+  near(r.crit, 14); near(r.bonus, 150); near(r.average, r.hit * 1.21);
 });
 test('official small-node defaults calculate comparable one-point investments', () => {
   const c = Object.fromEntries(comparePassives(fresh()).map(r => [r.key, r]));
@@ -66,4 +66,10 @@ test('marginal rows sort by percentage gain descending', () => {
 });
 test('zero DPS marginal rows remain finite in absolute terms', () => {
   assert.ok(marginalRows(fresh({base:0})).every(r=>r.percent===null && Number.isFinite(r.delta)));
+});
+
+test('legacy custom base critical bonus folds into increases without changing damage', () => {
+ const s = migrate(fresh({baseBonus:150,bonusInc:rows(50)}));
+ assert.equal(s.baseBonus,100);near(calculate(s).bonus,225);
+ near(calculate(migrate(s)).dps,calculate(s).dps);
 });
